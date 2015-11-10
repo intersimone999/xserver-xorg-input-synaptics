@@ -1,20 +1,20 @@
 /*
- * Copyright © 1999 Henry Davies
- * Copyright © 2001 Stefan Gmeiner
- * Copyright © 2002 S. Lehner
- * Copyright © 2002 Peter Osterlund
- * Copyright © 2002 Linuxcare Inc. David Kennedy
- * Copyright © 2003 Hartwig Felger
- * Copyright © 2003 Jörg Bösner
- * Copyright © 2003 Fred Hucht
- * Copyright © 2004 Alexei Gilchrist
- * Copyright © 2004 Matthias Ihmig
- * Copyright © 2006 Stefan Bethge
- * Copyright © 2006 Christian Thaeter
- * Copyright © 2007 Joseph P. Skudlarek
- * Copyright © 2008 Fedor P. Goncharov
- * Copyright © 2008-2012 Red Hat, Inc.
- * Copyright © 2011 The Chromium OS Authors
+ * Copyright ï¿½ 1999 Henry Davies
+ * Copyright ï¿½ 2001 Stefan Gmeiner
+ * Copyright ï¿½ 2002 S. Lehner
+ * Copyright ï¿½ 2002 Peter Osterlund
+ * Copyright ï¿½ 2002 Linuxcare Inc. David Kennedy
+ * Copyright ï¿½ 2003 Hartwig Felger
+ * Copyright ï¿½ 2003 Jï¿½rg Bï¿½sner
+ * Copyright ï¿½ 2003 Fred Hucht
+ * Copyright ï¿½ 2004 Alexei Gilchrist
+ * Copyright ï¿½ 2004 Matthias Ihmig
+ * Copyright ï¿½ 2006 Stefan Bethge
+ * Copyright ï¿½ 2006 Christian Thaeter
+ * Copyright ï¿½ 2007 Joseph P. Skudlarek
+ * Copyright ï¿½ 2008 Fedor P. Goncharov
+ * Copyright ï¿½ 2008-2012 Red Hat, Inc.
+ * Copyright ï¿½ 2011 The Chromium OS Authors
  *
  * Permission to use, copy, modify, distribute, and sell this software
  * and its documentation for any purpose is hereby granted without
@@ -41,7 +41,7 @@
  *      Stefan Bethge <stefan.bethge@web.de>
  *      Matthias Ihmig <m.ihmig@gmx.net>
  *      Alexei Gilchrist <alexei@physics.uq.edu.au>
- *      Jörg Bösner <ich@joerg-boesner.de>
+ *      Jï¿½rg Bï¿½sner <ich@joerg-boesner.de>
  *      Hartwig Felger <hgfelger@hgfelger.de>
  *      Peter Osterlund <petero2@telia.com>
  *      S. Lehner <sam_x@bluemail.ch>
@@ -844,6 +844,23 @@ set_default_parameters(InputInfoPtr pInfo)
                     "Invalid Y resolution, using 1 instead.\n");
         pars->resolution_vert = 1;
     }
+
+    /* Touchpad sampling rate is too low to detect all movements.
+       A user may lift one finger and put another one down within the same
+       EV_SYN or even between samplings so the driver doesn't notice at all.
+
+       We limit the movement to 20 mm within one event, that is more than
+       recordings showed is needed (17mm on a T440).
+      */
+    if (pars->resolution_horiz > 1 &&
+        pars->resolution_vert > 1)
+        pars->maxDeltaMM = 20;
+    else {
+        /* on devices without resolution set the vector length to 0.25 of
+           the touchpad diagonal */
+        pars->maxDeltaMM = diag * 0.25;
+    }
+
 
     /* Warn about (and fix) incorrectly configured TopEdge/BottomEdge parameters */
     if (pars->top_edge > pars->bottom_edge) {
@@ -1888,6 +1905,9 @@ SynapticsDetectFinger(SynapticsPrivate * priv, struct SynapticsHwState *hw)
     if ((hw->z > para->palm_min_z) && (hw->fingerWidth > para->palm_min_width))
         return FS_BLOCKED;
 
+    if (priv->has_mt_palm_detect)
+        return finger;
+
     if (hw->x == 0 || priv->finger_state == FS_UNTOUCHED)
         priv->avg_width = 0;
     else
@@ -2302,6 +2322,13 @@ get_delta(SynapticsPrivate *priv, const struct SynapticsHwState *hw,
     *dy = integral;
 }
 
+/* Vector length, but not sqrt'ed, we only need it for comparison */
+static inline double
+vlenpow2(double x, double y)
+{
+    return x * x + y * y;
+}
+
 /**
  * Compute relative motion ('deltas') including edge motion.
  */
@@ -2311,6 +2338,7 @@ ComputeDeltas(SynapticsPrivate * priv, const struct SynapticsHwState *hw,
 {
     enum MovingState moving_state;
     double dx, dy;
+    double vlen;
     int delay = 1000000000;
 
     dx = dy = 0;
@@ -2355,6 +2383,14 @@ ComputeDeltas(SynapticsPrivate * priv, const struct SynapticsHwState *hw,
 
  out:
     priv->prevFingers = hw->numFingers;
+
+    vlen = vlenpow2(dx/priv->synpara.resolution_horiz,
+                    dy/priv->synpara.resolution_vert);
+
+    if (vlen > priv->synpara.maxDeltaMM * priv->synpara.maxDeltaMM) {
+        dx = 0;
+        dy = 0;
+    }
 
     *dxP = dx;
     *dyP = dy;
@@ -3222,9 +3258,11 @@ HandleState(InputInfoPtr pInfo, struct SynapticsHwState *hw, CARD32 now,
         }
     }
 
-    /* If a physical button is pressed on a clickpad, use cumulative relative
-     * touch movements for motion */
-    if (para->clickpad && (priv->lastButtons & 7) &&
+    /* If a physical button is pressed on a clickpad or a two-finger scrolling
+     * is ongoing, use cumulative relative touch movements for motion */
+    if (para->clickpad &&
+        ((priv->lastButtons & 7) ||
+        (priv->vert_scroll_twofinger_on || priv->horiz_scroll_twofinger_on)) &&
         priv->last_button_area != TOP_BUTTON_AREA) {
         hw->x = hw->cumulative_dx;
         hw->y = hw->cumulative_dy;
