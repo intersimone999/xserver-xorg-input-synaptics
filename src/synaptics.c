@@ -852,14 +852,14 @@ set_default_parameters(InputInfoPtr pInfo)
        We limit the movement to 20 mm within one event, that is more than
        recordings showed is needed (17mm on a T440).
       */
-    if (pars->resolution_horiz > 1 &&
-        pars->resolution_vert > 1)
-        pars->maxDeltaMM = 20;
-    else {
+    //if (pars->resolution_horiz > 1 &&
+    //    pars->resolution_vert > 1)
+    //   pars->maxDeltaMM = 20;
+    //else {
         /* on devices without resolution set the vector length to 0.25 of
            the touchpad diagonal */
-        pars->maxDeltaMM = diag * 0.25;
-    }
+        //pars->maxDeltaMM = diag * 0.25;
+    //}
 
 
     /* Warn about (and fix) incorrectly configured TopEdge/BottomEdge parameters */
@@ -1905,8 +1905,8 @@ SynapticsDetectFinger(SynapticsPrivate * priv, struct SynapticsHwState *hw)
     if ((hw->z > para->palm_min_z) && (hw->fingerWidth > para->palm_min_width))
         return FS_BLOCKED;
 
-    if (priv->has_mt_palm_detect)
-        return finger;
+    //if (priv->has_mt_palm_detect)
+    //    return finger;
 
     if (hw->x == 0 || priv->finger_state == FS_UNTOUCHED)
         priv->avg_width = 0;
@@ -2387,10 +2387,10 @@ ComputeDeltas(SynapticsPrivate * priv, const struct SynapticsHwState *hw,
     vlen = vlenpow2(dx/priv->synpara.resolution_horiz,
                     dy/priv->synpara.resolution_vert);
 
-    if (vlen > priv->synpara.maxDeltaMM * priv->synpara.maxDeltaMM) {
-        dx = 0;
-        dy = 0;
-    }
+    //if (vlen > priv->synpara.maxDeltaMM * priv->synpara.maxDeltaMM) {
+    //    dx = 0;
+    //    dy = 0;
+    //}
 
     *dxP = dx;
     *dyP = dy;
